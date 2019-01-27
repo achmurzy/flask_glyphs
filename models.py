@@ -1,7 +1,18 @@
 from server import db
 ###
-#Glyph processing
+#Glyph model definitions
+#Brad Boyle would likely write this type of thing in bash and psql
+#Using an ORM, we can write DB code in python3. Very nice
 ###
+
+#Training sets will be composed of one or more alphabets
+
+#We may prefer a many-to-many relationship here, so that we can
+#assign the same glyph to multiple alphabets.
+class Alphabet(db.Model):
+	id = db.Column(db.Integer, primary_key=True)
+	glyphs = db.relationship('Glyph', backref='alphabet', lazy='dynamic')
+
 class Glyph(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	#Glyphs are nothing more than a list of strokes. 
@@ -22,6 +33,7 @@ class Point(db.Model):
 	y = db.Column(db.Float)
 	stroke_id = db.Column(db.Integer, db.ForeignKey('stroke.id'))
 	line_id = db.Column(db.Integer, db.ForeignKey('line.id'))
+
 ###
 #Drawing processing
 ###
