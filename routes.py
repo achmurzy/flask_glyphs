@@ -1,6 +1,5 @@
 from models import Glyph, Stroke, Point
 from server import app
-from parser import store_glyphs
 from flask import jsonify, request
 import requests
 
@@ -11,7 +10,7 @@ global_glyph_data = 'empty'
 def store_glyph():
 	global global_glyph_data
 	global_glyph_data = request.get_json();
-	store_glyphs(global_glyph_data)
+	#store_glyphs(global_glyph_data)
 	#session.add(glyph)
 	return 'OK'
 
