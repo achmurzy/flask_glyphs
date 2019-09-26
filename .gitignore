@@ -11,5 +11,4 @@ dist/
 build/
 *.egg-info/
 
-rnn/
-datasets/
+venv/

@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 61ae1ea0141b
+Revision ID: e35ed3be8db9
 Revises: 
-Create Date: 2019-03-10 14:03:06.949376
+Create Date: 2019-09-23 18:36:25.692190
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '61ae1ea0141b'
+revision = 'e35ed3be8db9'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -47,6 +47,13 @@ def upgrade():
     sa.Column('end', sa.Integer(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('contour',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('orientation', sa.Boolean(), nullable=True),
+    sa.Column('drawing_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['drawing_id'], ['drawing.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('glyph',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('unicode', sa.Integer(), nullable=True),
@@ -64,21 +71,19 @@ def upgrade():
     sa.ForeignKeyConstraint(['font_id'], ['font.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('contour',
-    sa.Column('id', sa.Integer(), nullable=False),
+    op.create_table('composite',
     sa.Column('glyph_id', sa.Integer(), nullable=True),
-    sa.Column('drawing_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['drawing_id'], ['drawing.id'], ),
-    sa.ForeignKeyConstraint(['glyph_id'], ['glyph.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.Column('contour_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['contour_id'], ['contour.id'], ),
+    sa.ForeignKeyConstraint(['glyph_id'], ['glyph.id'], )
     )
     op.create_table('offset',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('x', sa.Integer(), nullable=True),
     sa.Column('y', sa.Integer(), nullable=True),
-    sa.Column('glyph_id', sa.Integer(), nullable=True),
-    sa.Column('composite_name', sa.String(length=64), nullable=True),
-    sa.ForeignKeyConstraint(['glyph_id'], ['glyph.id'], ),
+    sa.Column('glyph_name', sa.String(length=64), nullable=True),
+    sa.Column('composite_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['composite_id'], ['glyph.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('stroke',
@@ -91,8 +96,8 @@ def upgrade():
     )
     op.create_table('point',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('x', sa.Integer(), nullable=True),
-    sa.Column('y', sa.Integer(), nullable=True),
+    sa.Column('x', sa.Float(), nullable=True),
+    sa.Column('y', sa.Float(), nullable=True),
     sa.Column('stroke_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['stroke_id'], ['stroke.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -105,8 +110,9 @@ def downgrade():
     op.drop_table('point')
     op.drop_table('stroke')
     op.drop_table('offset')
-    op.drop_table('contour')
+    op.drop_table('composite')
     op.drop_table('glyph')
+    op.drop_table('contour')
     op.drop_table('unicode_block')
     op.drop_table('font')
     op.drop_table('drawing')

@@ -1,7 +1,9 @@
 from models import Glyph, Stroke, Point
-from server import app
+from server import app, db
+from encoder import recursive_alchemy_encoder
+
 from flask import jsonify, request
-import requests
+import requests, json
 
 global_glyph_data = 'empty'
 #Store a full window's worth of glyphs
@@ -18,5 +20,6 @@ def store_glyph():
 # - or lets say serve a set of generated glyphs
 @app.route('/get_glyph', methods = ['GET'])
 def send_glyph():
-	print(global_glyph_data)
-	return jsonify(global_glyph_data)
+    glyph_data = db.session.query(Glyph).filter((Glyph.id > 0) & (Glyph.id < 40)).all()
+    response = app.response_class(response=json.dumps(glyph_data, cls=recursive_alchemy_encoder(True, ['name', 'unicode', 'advance_width', 'contours', 'orientation', 'strokes', 'order', 'type', 'points', 'x', 'y']), check_circular=False), status=200, mimetype='application/json')
+    return response

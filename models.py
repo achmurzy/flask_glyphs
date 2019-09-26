@@ -28,6 +28,10 @@ class UnicodeBlock(db.Model):
 	end = db.Column(db.Integer)
 	glyphs = db.relationship('Glyph', back_populates='block')
 
+composite_table = db.Table('composite', 
+	db.Column('glyph_id', db.Integer, db.ForeignKey('glyph.id')),
+	db.Column('contour_id', db.Integer, db.ForeignKey('contour.id')))
+
 class Glyph(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	unicode = db.Column(db.Integer)
@@ -43,9 +47,14 @@ class Glyph(db.Model):
 
 	simple = db.Column(db.Boolean)
 
-	#These relationships are sort of mutually exclusive
-	offsets = db.relationship('Offset', back_populates='glyph', cascade="all, delete-orphan")
-	contours = db.relationship('Contour', back_populates='glyph', cascade="all, delete-orphan")
+	#These relationships are sort of mutually exclusive:
+	#Offsets only appear on a glyph when its composite i.e. not simple. Offsets point to contours on simple glyphs
+	#Note: Must explicitly specify the foreign key on the Offset table since it contains two foreign keys pointing back to the Glyph table
+	offsets = db.relationship('Offset', back_populates='composite_glyph', cascade="all, delete-orphan")
+	
+	#Simple glyphs point directly to their contours
+	#contours = db.relationship('Contour', back_populates='glyph', cascade="all, delete-orphan")
+	contours = db.relationship('Contour', back_populates='glyphs', secondary=composite_table)
 
 	#If you have a two-part model name, use underscore in the stringification
 	block_id = db.Column(db.Integer, db.ForeignKey('unicode_block.id'))
@@ -63,19 +72,18 @@ class Offset(db.Model):
 	x = db.Column(db.Integer)
 	y = db.Column(db.Integer)
 
-	glyph_id = db.Column(db.Integer, db.ForeignKey('glyph.id'))
-	glyph = db.relationship('Glyph', back_populates="offsets")
+	glyph_name = db.Column(db.String(64))
 
-	composite_name = db.Column(db.String(64))
-	composite_glyph = db.relationship('Glyph') 
+	composite_id = db.Column(db.Integer, db.ForeignKey('glyph.id'))
+	composite_glyph = db.relationship('Glyph', back_populates='offsets') 
 
 class Contour(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
+	orientation = db.Column(db.Boolean)
 	strokes = db.relationship('Stroke', back_populates='contour', cascade="all, delete-orphan")
 	
-	glyph_id = db.Column(db.Integer, db.ForeignKey('glyph.id'))
-	glyph = db.relationship('Glyph', back_populates="contours")
-	
+	glyphs = db.relationship('Glyph', back_populates="contours", secondary=composite_table)
+
 	drawing_id = db.Column(db.Integer, db.ForeignKey('drawing.id'))
 	drawing = db.relationship('Drawing', back_populates="contours")
 

@@ -1,26 +1,58 @@
 #Flask app backend for our personal website and associated data science side projects. Starting with glyph generator 
 
-Flask sqlalchemy tutorial: https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world
+Flask sqlalchemy tutorial: 
+https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world
 Another useful management resource for SQLite:
 https://www.youtube.com/watch?v=CxCK1DkikgA
 
 Plans for this tool: 	
-			-Glyph processing
-			-Text processing
-			-A novel network architecture for linking strokes with text generation to give our 3D characters voices.
+	-Glyph processing
+	-Text processing
+	-A novel network architecture for linking strokes with text generation to give our 3D characters voices.
+
+INSTALLATION:
+requires python3, pip3, etc.
+
+sudo apt-get install python3 venv
+python3 -m venv venv
+source ./venv/bin/activate
+pip3 install flask
+pip3 install flask_cors
+pip3 install flask_sqlalchemy
+pip3 install flask_migrate
+pip3 install ndjson
+pip3 install fontTools
+pip3 install requests
+pip3 install --upgrade tensorflow
+
+
+FIRST-TIME STARTUP OR REBOOT:
+#Delete migrations folder
+#Delete old SQLite .db file
+flask db init
+flask db migrate
+flask db upgrade
+python3 initialize.py
 
 General workflow:
 -Change database representations -> 
 perform a migration: flask db migrate (sometimes push code to production server)  then: flask db upgrade
-"To sync the database in another system just refresh the migrations folder from source control and run the upgrade command." - adds the migration script to production environs
+"To sync the database in another system just refresh the migrations folder from source control and run the upgrade command." 
+- adds the migration script to production environs
 
 Undo migration (migrating twice to go backwards is probably not ideal)
 after upgrade: flask db downgrade 
-then delete the obsolete migration script in '/versions', revise your code, and migrate as usual. Obviously, to revert changes, revert your code
+then delete the obsolete migration script in '/versions', revise your code, and migrate as usual. 
+Obviously, to revert changes, revert your code
 
 #Start app
+source ./venv/bin/activate
 python3 server.py
 flask run
+
+#Try this to get an interpreter for debugging
+source ./venv/bin/activate
+python3 -i server.py
 
 sudo python3 train_model.py \
     --training_data=data/training.tfrecord-00000-of-00010 \
@@ -32,18 +64,9 @@ sudo python3 train_model.py \
 gsutil -m cp "gs://quickdraw_dataset/full/simplified/cactus.ndjson" . 
 
 TODO: 
-	-Learn TensorFlow!
-	
-	-Create a protocol for sending font/glyph data to the front-end for visualization purposes. 
-		-Need this to verify that we are parsing glyphs properly. Visualizer should accord with normalization scheme for glyphs
-
-	-Query unicode glyphs, and loop through their linked glyph records (composites), applying offsets to achieve a sequence of x-y coordinates and strokes data. Achieve the same format with drawings, and make an output format that can be quickly and easily sent to the front-end for visualization
-		-Run the sketch-RNN model on a set of Arabic fonts to generate a demo model
-			-Begin thinking about how to query the database to prepare training data (i.e. normalization, standardization, offsetting, etc)
-				-Use the normalization scheme 'Simplified Drawings' detailed here: https://github.com/googlecreativelab/quickdraw-dataset
-				-Don't store raw/un-normalized font data.
-			
-	-Teach the model how to handle 'off-curve' points by modeling sequences of Bezier types. 
+	-Find an input model for incorporating other glyph/contour data (e.g. stroke types L,Q,C,M) rather than just x-y coordinates/stroke order
+	-Run the sketch-RNN model on a set of Arabic fonts to generate a demo model
+		-Use the normalization scheme 'Simplified Drawings' detailed here: https://github.com/googlecreativelab/quickdraw-dataset
 
 	-Begin thinking about how to add large amounts of text (Qur'an, bible, novels) to the database
 		-Need ways to clean up punctuation, whitespacing, headings, etc when parsing .txt/.pdfs
@@ -51,11 +74,29 @@ TODO:
 				https://github.com/DH-Box/corpus-downloader
 				http://corpus-db.org/
 
-	-Add a way to detect when a font/dataset has already been loaded into the databse to prevent replicating datapoints
+	-Add a way to detect when a font/dataset has already been loaded into the databse to prevent replicating datapoints when constructing alphabets, etc.
+	-Achieve the same (Glyph/Contour/Stroke/Point) format with drawings and visualize them on the front-end. 
+		Major difference: Drawings do not have closed curves, but are simply lines. Thus, they may not ultimately be appropriate for the font engines we'll be using ultimately. 
+			-This is the same problem as we (poorly) solved with our original glyph generator: making closed curves from atomic lines. We should focus on fonts for now
 
+	-Look into deploying and running these models on CyVerse/Azure 
 	-Consider switching away from SQLite (to Postgres) for ALTER support 
 
 DONE:
+-Learn TensorFlow!
+	-Begin thinking about how to query the database to prepare training data (i.e. normalization, standardization, offsetting, etc)	
+	SOLUTION: Databse to model pipeline (normalization, batching) set up. Learning Tensorflow 2.0 revamped API, and depending heavily on Keras. Basic LSTM architecture done, 
+		need to consider implementing other types of architecture to achieve meaningful output for contours AND for glyphs.
+
+-Incorporate the concept of contour direction (clock-wise or counter clock-wise) and determine it during parsing
+
+-Query unicode glyphs, and loop through their linked glyph records (composites), applying offsets to achieve a sequence of x-y coordinates and strokes data. 
+		-Right now, we look to only have simple, Unicode glyphs properly stored. We need to convert offset information into x-y data at some point.
+			-Offsets basically define a 'moveto' symbol M in the glyph's contours, directing where a composite glyph should draw its components. 
+				-In this case, the offset points to a glyph, whose contours must be included. We need a way to use offsets as queries for a glyph (and its contours) when pulling composites
+					for training data and visualization purposes. The output should simply be seamless integration of contours onto the final object.
+					SOLUTION: Many-to-many relationship on glyphs and contours was the right way to do composites. 
+
 -Write a function to receive a glyph from the front-end and save it using a retrievable I.D. 
 
 -Add font file metadata to the database - a way to detect duplicate font versions?
@@ -76,6 +117,11 @@ DONE:
 						-Make it so that Points can belong to multiple Strokes to prevent storing the same points over and over
 						-Alternatively, design strokes so that the end-point is implicit when constructing training data, etc.
 							-We chose the latter
+
+-Create a protocol for sending font/glyph data to the front-end for visualization purposes. 
+		-Need this to verify that we are parsing glyphs properly. Visualizer should accord with normalization scheme for glyphs
+			-Packaging raw database models into JSON and successfully sending to front-end, but we need to lay out the final architecture to have a common set of representations
+				-SOLUTION: adding columns from the database models as needed using our custom encoder
 
 -Find representations for each data type at each level (glyphs, strokes, prose text)
 	-Two data types: drawings and glyphs from fonts are the same object, containing stroke information and xy coordinates. 

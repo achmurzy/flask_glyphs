@@ -99,7 +99,6 @@ def parse_font(font):
         glyph = tools_font['glyf'][name]
         horizontal_metrics = tools_font['hmtx'][name]
         unicode_g = -1 
-        simple = True
         unicode_block = None
         offsets = []
         contours = []
@@ -107,16 +106,15 @@ def parse_font(font):
             unicode_g = name_dict[name]
             unicode_block = db.session.query(UnicodeBlock).filter((UnicodeBlock.start <= unicode_g) & (unicode_g <= UnicodeBlock.end)).first()
         if glyph.numberOfContours < 1:  #Check for composites
-            simple = False
             if glyph.numberOfContours < 0:
                 for x in glyph.components:
-                    offsets.append(Offset(x=x.x, y=x.y, composite_name=x.glyphName))
+                    offsets.append(Offset(x=x.x, y=x.y, glyph_name=x.glyphName)) #Only store the name - the composite_glyph reference will be back-populated, and the component glyph will be referenced later
                 glyphs[name] = Glyph(unicode=unicode_g, name=name,
                                     advance_width=horizontal_metrics[0],
                                     left_side_bearing=horizontal_metrics[1],
                                     xMin=glyph.xMin, xMax=glyph.xMax, 
                                     yMin=glyph.yMin, yMax=glyph.yMax, 
-                                    simple=simple, contours=contours,
+                                    simple=False, contours=contours,
                                     offsets = offsets, 
                                     block=unicode_block, font=font_record)
         else:             #Extract all simple glyphs in the font
@@ -130,8 +128,16 @@ def parse_font(font):
                 strokes = []
                 points = []
                 flag_val = 1
+
+                #Determine curve orientation: https://en.wikipedia.org/wiki/Curve_orientation
+                clockwise = True
+                hull_index = 0
+                hull_y = 0
+                hull_x = 0
+
                 points.append(Point(x=glyph.coordinates[startPt][0], y=glyph.coordinates[startPt][1]))
                 for xy in range(startPt+1, endPt+1):
+                    new_p = None
                     if flag_val == 1:
                         if glyph.flags[xy] == 1:    #Built a line 'L'
                             strokes.append(Stroke(type='L', order=s_ind, points=points))
@@ -153,24 +159,53 @@ def parse_font(font):
                             p1 = [points[-1].x, points[-1].y]
                             p2 = [glyph.coordinates[xy][0], glyph.coordinates[xy][1]]
                             midpoint = Point(x=(p1[0] + p2[0])/2, y=(p1[1] + p2[1])/2)
-                            points = [midpoint, Point(x=glyph.coordinates[xy][0], y=glyph.coordinates[xy][1])]
+                            new_p = Point(x=glyph.coordinates[xy][0], y=glyph.coordinates[xy][1])
+                            points = [midpoint, new_p]
                     flag_val = glyph.flags[xy]
+
+                    hull_point = (hull_y == new_p.y and hull_x < new_p.x) or (hull_y < new_p.y)
+                    if hull_point:    
+                        hull_index = s_ind-1
+                        hull_y = new_p.y
+                        hull_x = new_p.x
                 #We'll just have to remember to add a return to start stroke when making training data
                 #points = [Point(x=strokes[-1].points[1].x, y=strokes[-1].points[1].y),
                 #            Point(x=strokes[1].points[1].x, y=strokes[1].points[1].x)]
                 strokes.append(Stroke(type='L', order=s_ind, points=points))
+
+                a = strokes[hull_index - 1].points[-1]
+                b = strokes[hull_index].points[-1]
+                c = strokes[hull_index + 1].points[-1]
+                determinant = ((b.x - a.x)*(c.y - c.y)) - ((c.x - a.x)*(b.y - a.y))
+                clockwise = determinant < 0
                 s_ind += 1
-                strokes.append(Stroke(type='M', order=s_ind))
-                contours.append(Contour(strokes=strokes))
+                strokes.append(Stroke(type='M', order=s_ind))                   #Purpose is to demarcate contours for training???
+                contours.append(Contour(orientation=clockwise, strokes=strokes))
             glyphs[name] = Glyph(unicode=unicode_g, name=name,
                             advance_width=horizontal_metrics[0],
                             left_side_bearing=horizontal_metrics[1],
                             xMin=glyph.xMin, xMax=glyph.xMax, 
                             yMin=glyph.yMin, yMax=glyph.yMax, 
-                            simple=simple, contours=contours,
-                            offsets = offsets, 
+                            simple=True, contours=contours,
+                            #offsets = offsets, 
                             block=unicode_block, font=font_record) 
     
     #This adds absolutely everything because font is linked to everything else
     db.session.add(font_record)
+
+    #MAKE ASSOCIATION TABLE AND MAKE GLYPHS/CONTOURS MANY-TO-MANY
+    #Link composite glyphs to their constituent simple forms
+    composite_glyphs = db.session.query(Glyph).filter(Glyph.simple == False).all()
+    for composite in composite_glyphs:
+        contours = []
+        for component in composite.offsets:
+            component_glyph = db.session.query(Glyph).filter(Glyph.name == component.glyph_name).first()
+            new_contour = Contour(strokes=[Stroke(type='M', order=0, points=[Point(x=component.x, y=component.y)])], glyphs=[composite])
+            db.session.add(new_contour)
+            contours.append(new_contour)
+            contours.extend(component_glyph.contours)
+
+        composite.contours = contours
+            
+    db.session.commit()
     return glyphs
