@@ -20,6 +20,8 @@ class Font(db.Model):
 	yMax = db.Column(db.Integer)
 
 	glyphs = db.relationship('Glyph', back_populates='font', cascade="all, delete-orphan")
+	def __repr__(self):
+		return '<Font {}>'.format(self.family + " " + self.style)
 
 class UnicodeBlock(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
@@ -91,7 +93,9 @@ class Stroke(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	type = db.Column(db.String(1))
 	order = db.Column(db.Integer)
-	points = db.relationship('Point', back_populates='strokes', cascade="all, delete-orphan")
+	
+	#point_id = db.Column(db.Integer, db.ForeignKey('point.id'))
+	point = db.relationship('Point', back_populates='stroke', uselist=False, cascade="all, delete-orphan")
 	
 	contour_id = db.Column(db.Integer, db.ForeignKey('contour.id'))
 	contour = db.relationship('Contour', back_populates='strokes')
@@ -102,7 +106,7 @@ class Point(db.Model):
 	y = db.Column(db.Float)
 	
 	stroke_id = db.Column(db.Integer, db.ForeignKey('stroke.id'))
-	strokes = db.relationship('Stroke', back_populates='points')
+	stroke = db.relationship('Stroke', back_populates='point')
 
 ###
 #Quick, Draw! representation:

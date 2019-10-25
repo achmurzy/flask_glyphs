@@ -17,7 +17,7 @@ def _initBlocks(text):
     m = pattern.match(line)
     if m:
       start, end, name = m.groups()
-      _blocks.append((int(start, 16), int(end, 16), name))
+      _blocks.append((int(start, 16), int(end, 16), name))  #This is converting from the hexadecimal stored in the raw .txt file
 
 blocks = open("unicode_blocks.txt")
 _initBlocks(blocks.read())

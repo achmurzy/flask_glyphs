@@ -64,9 +64,30 @@ sudo python3 train_model.py \
 gsutil -m cp "gs://quickdraw_dataset/full/simplified/cactus.ndjson" . 
 
 TODO: 
-	-Find an input model for incorporating other glyph/contour data (e.g. stroke types L,Q,C,M) rather than just x-y coordinates/stroke order
+	-Start actually generating reasonable looking glyphs
+		-One good approach would be attempting to overfit a small dataset just as a proof of concept
+			-Beyond that, outstanding questions:
+				-Is the scale and structure of our input data sufficient (more fonts, more glyphs, different representation)?
+				-Is the architecture effective for solving our problem (number of cells, number of layers)?
+				-Is our training procedure well-motivated (loss function, optimizers, hyperparameters)?
+
 	-Run the sketch-RNN model on a set of Arabic fonts to generate a demo model
 		-Use the normalization scheme 'Simplified Drawings' detailed here: https://github.com/googlecreativelab/quickdraw-dataset
+
+	-Add a way to detect when a font/dataset has already been loaded into the databse to prevent replicating datapoints when constructing alphabets, etc.
+		-Completed using standard font metadata
+
+	-Think carefully about metadata on fonts - after tens of thousands of fonts, it will be very difficult to separate differents styles of font within and across languages. Unicode blocks themselves will be very heterogeneous. Need a way to learn and query particular styles when training and generating.
+
+	-Consider using image-based learning rather than sequence-based contour data. This would open up the possibility of using CNNs, based on:
+	https://pillow.readthedocs.io/en/stable/reference/ImageFont.html
+	https://github.com/erikbern/deep-fonts
+
+	-Scale-up your dataset by scraping fonts from online aggregators:
+	Sources: 
+	https://www.fontspace.com/unicode/block	(Organized by unicode blocks)
+	-Look into deploying and running these models on CyVerse/Azure 
+	-Consider switching away from SQLite (to Postgres) for ALTER support 
 
 	-Begin thinking about how to add large amounts of text (Qur'an, bible, novels) to the database
 		-Need ways to clean up punctuation, whitespacing, headings, etc when parsing .txt/.pdfs
@@ -74,21 +95,14 @@ TODO:
 				https://github.com/DH-Box/corpus-downloader
 				http://corpus-db.org/
 
-	-Add a way to detect when a font/dataset has already been loaded into the databse to prevent replicating datapoints when constructing alphabets, etc.
-	-Achieve the same (Glyph/Contour/Stroke/Point) format with drawings and visualize them on the front-end. 
-		Major difference: Drawings do not have closed curves, but are simply lines. Thus, they may not ultimately be appropriate for the font engines we'll be using ultimately. 
-			-This is the same problem as we (poorly) solved with our original glyph generator: making closed curves from atomic lines. We should focus on fonts for now
-
-	-Look into deploying and running these models on CyVerse/Azure 
-	-Consider switching away from SQLite (to Postgres) for ALTER support 
-
 DONE:
--Learn TensorFlow!
-	-Begin thinking about how to query the database to prepare training data (i.e. normalization, standardization, offsetting, etc)	
-	SOLUTION: Databse to model pipeline (normalization, batching) set up. Learning Tensorflow 2.0 revamped API, and depending heavily on Keras. Basic LSTM architecture done, 
-		need to consider implementing other types of architecture to achieve meaningful output for contours AND for glyphs.
+-Find an input model for incorporating other glyph/contour data (e.g. stroke types L,Q,C,M) rather than just x-y coordinates/stroke order
+	SOLUTION: Added encoded stroke types to the feature vector, which compiles/runs but unable to produce reasonable output
 
--Incorporate the concept of contour direction (clock-wise or counter clock-wise) and determine it during parsing
+-Achieve the same (Glyph/Contour/Stroke/Point) format with drawings and visualize them on the front-end. 
+		Major difference: Drawings do not have closed curves, but are simply lines. Thus, they may not be appropriate for the font engines we'll be using ultimately. 
+			-This is the same problem as we (poorly) solved with our original glyph generator: making closed curves from atomic lines. We should focus on fonts for now
+				SOLUTION: Focus on fonts and forget about front-end generation of glyphs for the time being.
 
 -Query unicode glyphs, and loop through their linked glyph records (composites), applying offsets to achieve a sequence of x-y coordinates and strokes data. 
 		-Right now, we look to only have simple, Unicode glyphs properly stored. We need to convert offset information into x-y data at some point.
@@ -140,7 +154,27 @@ DONE:
 -Find out how to initialize the complex hierarchical relationships behind your font representations. Right now, no way to properly index foreign keys, etc.
 	-SOLUTION: extensive bidirectional relationships for rich representations and personal-use database
 
+-Learn TensorFlow!
+	-Begin thinking about how to query the database to prepare training data (i.e. normalization, standardization, offsetting, etc)	
+	SOLUTION: Databse to model pipeline (normalization, batching) set up. Learning Tensorflow 2.0 revamped API, and depending heavily on Keras. Basic LSTM architecture done, 
+		need to consider implementing other types of architecture to achieve meaningful output for contours AND for glyphs.
+
+-Incorporate the concept of contour direction (clock-wise or counter clock-wise) and determine it during parsing
+	SOLUTION: not necessary for rendering or training glyphs so may remove in the future - possible various types of stroke metadata could augment AI training
+
 NOTES:
+Deep learning notes:
+	Char rnn notes:
+		-Epochs 10 -> 25, loss function continues to decrease but does not flatten. Unclear howto interpret the absolute loss function value. Is a loss < 1 considered 'convergent'?. 10 -> 25 resulted in a decrease in loss around 0.75. Anecdotally, there seem to be small improvements in the quality of the generated text, with still-obvious mistakes.
+
+You are not alone!! https://research.gold.ac.uk/19352/1/rnn_ensemble_nips.pdf
+"We also observe some interesting behaviour. When multiple models are active with roughly equal mixture weights, and the system is fed a sequence containing words or phrases that are common to all models, the probabilities for the common characters accumulate whilst probabilities specific to
+individual models are suppressed, i.e. when multiple models are active the system tends towards common words and phrases."
+Our solution: more rigidly link the generating model to the state of a virtual character.
+
+Ultimate goal is sequence generation on the basis of symbols generated from gameplay data (character state machines):
+https://arxiv.org/pdf/1211.3711.pdf
+Generating language and glyphs from gameplay requires pairing a corpus of gameplay data with ensembles of models to create a hierarchical or state-based generator to map onto characters.
 
 Important resources regarding true-type, open-type fonts:
 https://stackoverflow.com/questions/20733790/truetype-fonts-glyph-are-made-of-quadratic-bezier-why-do-more-than-one-consecu
@@ -156,3 +190,10 @@ We design models based on querying subsets of symbols and combining their featur
 -By re-writing areas of Unicode space, we can eventually combine text processing with glyph generation to annotate generated text with the appropriate generated symbol sets for quite interesting effects. Finally, our ultimate intention is to add this generative routine to a Unity game, and parameterize it with player interaction and character bodies.
 
 Ultimately the purpose of a web framework can be a flexible interactive tool for creating false languages. The basis of this flexibility is the asynchronous nature of the front and back-end, where we can continuously iterate modeling our training data, which is itself continuously iterated on the front-end. These two workflows can be performed almost simultaneously
+
+DATA SOURCES:
+https://www.myfonts.com/search//free/
+https://www.google.com/get/noto/
+https://github.com/adobe-fonts
+https://www.fontspace.com/category/unicode
+https://drive.google.com/file/d/0B0GtwTQ6IF9AU3NOdzFzUWZ0aDQ/view
